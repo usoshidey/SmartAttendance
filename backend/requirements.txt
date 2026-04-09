@@ -1,0 +1,33 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# Task queue
+celery==5.4.0
+redis==5.0.7
+
+# Database
+sqlalchemy==2.0.31
+psycopg2-binary==2.9.9
+
+# ML / CV
+ultralytics==8.4.14
+deepface==0.0.98
+tensorflow==2.15.0
+tf-keras==2.15.0
+opencv-python-headless==4.10.0.84
+scikit-learn==1.5.1
+numpy==1.26.4
+
+# Excel
+openpyxl==3.1.5
+xlsxwriter==3.2.0
+
+# Utilities
+python-multipart==0.0.9
+pillow==10.4.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2          # passlib 1.7.4 is incompatible with bcrypt>=4.0 (wrap-bug detection crash)

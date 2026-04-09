@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Environment — NEVER commit this, it has passwords
+.env
+.env.*
+
+# Data & models
+data/
+models/
+smart_attendance.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Misc
+.DS_Store
+*.log
+.vscode/

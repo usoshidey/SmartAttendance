@@ -1,0 +1,103 @@
+
+services:
+  # ── Redis (message broker + task results) ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL Database ──────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: always
+    ports:
+      - "6006:5432"
+    environment:
+      - POSTGRES_USER=sa_user
+      - POSTGRES_PASSWORD=sa_password
+      - POSTGRES_DB=smart_attendance
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sa_user -d smart_attendance" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
+  backend:
+    image: usoshidey/smart-attendance-backend:latest
+    restart: always
+    ports:
+      - "6005:6005"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://sa_user:sa_password@db:5432/smart_attendance
+      - SECRET_KEY=${SECRET_KEY:-new-production-secret-2}
+      - SMTP_EMAIL=${SMTP_EMAIL:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 6005
+
+  # ── Celery Worker ────────────────────────────────────────────────────────────
+  worker:
+    image: usoshidey/smart-attendance-backend:latest
+    restart: always
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://sa_user:sa_password@db:5432/smart_attendance
+      - SECRET_KEY=${SECRET_KEY:-new-production-secret-2}
+      - SMTP_EMAIL=${SMTP_EMAIL:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "celery", "-A", "backend.tasks.celery_app", "inspect", "active" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: celery -A backend.tasks.celery_app worker --loglevel=info --concurrency=1
+
+  # ── React Frontend ──────────────────────────────────────────────────────────
+  frontend:
+    image: usoshidey/smart-attendance-frontend:latest
+    restart: always
+    ports:
+      - "6004:80"
+    depends_on:
+      - backend
+
+  # Watchtower disabled due to Docker API version incompatibility (1.40+)
+  # Uncomment below to enable auto-updates if you need them
+  # watchtower:
+  #   image: containrrr/watchtower:latest
+  #   restart: always
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --cleanup --interval 300
+
+volumes:
+  redis_data:
+  postgres_data:
