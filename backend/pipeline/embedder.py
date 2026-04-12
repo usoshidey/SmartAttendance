@@ -50,7 +50,7 @@ def generate_embeddings(
                 img_path          = fpath,
                 model_name        = model_name,
                 detector_backend  = "skip",
-                align             = True,
+                align             = False,
                 enforce_detection = False
             )
             if rep and rep[0].get("embedding"):
