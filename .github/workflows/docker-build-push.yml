@@ -10,7 +10,6 @@ on:
       - 'backend/Dockerfile'
       - 'frontend/Dockerfile.frontend'
       - 'backend/requirements.txt'
-      - 'package.json'
       - 'docker-compose.yml'
 
 jobs:
@@ -23,6 +22,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        # Needed to build ARM64 images on AMD64 GitHub runners
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -32,18 +35,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Backend Image
+      - name: Build and push Backend Image (multi-arch)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./backend/Dockerfile
           push: true
+          # Build for both ARM64 (Oracle Cloud A1) and AMD64 (local dev/other servers)
+          platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache,mode=max
 
-      - name: Build and push Frontend Image
+      - name: Build and push Frontend Image (multi-arch)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./frontend/Dockerfile.frontend
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache,mode=max
