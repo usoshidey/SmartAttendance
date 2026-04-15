@@ -40,11 +40,9 @@ export const api = {
   loginStudent: (roll_no, password) =>
     request("POST", "/auth/login/student", { roll_no, password }),
 
-  // ── OTP ────────────────────────────────────────────────────────────────────
-  verifyOtp: (user_id, otp) =>
-    request("POST", "/auth/verify-otp", { user_id, otp }),
-  resendOtp: (user_id) =>
-    request("POST", `/auth/resend-otp?user_id=${user_id}`),
+  // ── Email Verification (magic link) ───────────────────────────────────────
+  verifyEmailToken: (token) =>
+    request("GET", `/auth/verify-email?token=${encodeURIComponent(token)}`),
 
   me: () => request("GET", "/auth/me"),
   studentStatus: () => request("GET", "/auth/student/status"),
@@ -83,7 +81,7 @@ export const api = {
   getAttendanceByJob: (job_id) => request("GET", `/attendance/session/${job_id}`),
   downloadReport: (job_id) => `${BASE_URL}/attendance/download/${job_id}`,
   getAttendanceHistory: (subject_id, limit = 10) => request("GET", `/attendance/history/${subject_id}?limit=${limit}`),
-  downloadConsolidated:  (subject_id) => `${BASE_URL}/attendance/consolidated/${subject_id}`,
+  downloadConsolidated: (subject_id) => `${BASE_URL}/attendance/consolidated/${subject_id}`,
 };
 
 export default api;

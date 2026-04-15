@@ -6,13 +6,14 @@ import Dashboard from "./pages/Dashboard";
 import RegisterStudents from "./pages/RegisterStudents";
 import MarkAttendance from "./pages/MarkAttendance";
 import StudentsPage from "./pages/StudentsPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import api from "./api";
 
 const NAV_ITEMS = [
-  { id: "dashboard",  label: "Dashboard",        icon: "⬡" },
-  { id: "register",   label: "Register Students", icon: "◈" },
-  { id: "attendance", label: "Mark Attendance",   icon: "◉" },
-  { id: "students",   label: "Student Registry",  icon: "◫" },
+  { id: "dashboard", label: "Dashboard", icon: "⬡" },
+  { id: "register", label: "Register Students", icon: "◈" },
+  { id: "attendance", label: "Mark Attendance", icon: "◉" },
+  { id: "students", label: "Student Registry", icon: "◫" },
 ];
 
 function TeacherApp() {
@@ -20,14 +21,14 @@ function TeacherApp() {
   const [page, setPage] = useState("dashboard");
 
   // ── Registration global state (survives page nav) ─────────────────────────
-  const [regJobId,       setRegJobId]       = useState(null);
-  const [regJobStatus,   setRegJobStatus]   = useState(null);
+  const [regJobId, setRegJobId] = useState(null);
+  const [regJobStatus, setRegJobStatus] = useState(null);
   const [regSubjectName, setRegSubjectName] = useState("");
   const regPollRef = useRef(null);
 
   // ── Attendance global state (survives page nav) ───────────────────────────
-  const [attJobId,       setAttJobId]       = useState(null);
-  const [attJobStatus,   setAttJobStatus]   = useState(null);
+  const [attJobId, setAttJobId] = useState(null);
+  const [attJobStatus, setAttJobStatus] = useState(null);
   const [attSubjectName, setAttSubjectName] = useState("");
   const attPollRef = useRef(null);
 
@@ -42,7 +43,7 @@ function TeacherApp() {
         const j = await api.getJob(regJobId);
         setRegJobStatus(j.status);
         if (j.status === "done" || j.status === "failed") clearInterval(regPollRef.current);
-      } catch {}
+      } catch { }
     }, 3000);
     return () => clearInterval(regPollRef.current);
   }, [regJobId, regJobStatus]);
@@ -58,33 +59,33 @@ function TeacherApp() {
         const j = await api.getJob(attJobId);
         setAttJobStatus(j.status);
         if (j.status === "done" || j.status === "failed") clearInterval(attPollRef.current);
-      } catch {}
+      } catch { }
     }, 3000);
     return () => clearInterval(attPollRef.current);
   }, [attJobId, attJobStatus]);
 
-  const isRegistering       = regJobId && regJobStatus === "processing";
+  const isRegistering = regJobId && regJobStatus === "processing";
   const isMarkingAttendance = attJobId && attJobStatus === "processing";
 
   const handleNavigate = (id) => {
-    if (id === "attendance" && isRegistering)       return; // blocked
-    if (id === "register"   && isMarkingAttendance) return; // blocked
+    if (id === "attendance" && isRegistering) return; // blocked
+    if (id === "register" && isMarkingAttendance) return; // blocked
     setPage(id);
   };
 
   // Registration handlers
-  const handleRegStart  = (jobId, subjectName) => { setRegJobId(jobId); setRegJobStatus("processing"); setRegSubjectName(subjectName); };
+  const handleRegStart = (jobId, subjectName) => { setRegJobId(jobId); setRegJobStatus("processing"); setRegSubjectName(subjectName); };
   const handleRegCancel = () => { clearInterval(regPollRef.current); setRegJobId(null); setRegJobStatus(null); setRegSubjectName(""); };
-  const handleRegDone   = () => setRegJobStatus("done");
+  const handleRegDone = () => setRegJobStatus("done");
 
   // Attendance handlers
-  const handleAttStart  = (jobId, subjectName) => { setAttJobId(jobId); setAttJobStatus("processing"); setAttSubjectName(subjectName); };
+  const handleAttStart = (jobId, subjectName) => { setAttJobId(jobId); setAttJobStatus("processing"); setAttSubjectName(subjectName); };
   const handleAttCancel = () => { clearInterval(attPollRef.current); setAttJobId(null); setAttJobStatus(null); setAttSubjectName(""); };
-  const handleAttDone   = () => setAttJobStatus("done");
+  const handleAttDone = () => setAttJobStatus("done");
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard":  return <Dashboard onNavigate={handleNavigate} />;
+      case "dashboard": return <Dashboard onNavigate={handleNavigate} />;
       case "register":
         return <RegisterStudents
           globalJobId={regJobId}
@@ -101,8 +102,8 @@ function TeacherApp() {
           onJobCancel={handleAttCancel}
           onJobDone={handleAttDone}
         />;
-      case "students":   return <StudentsPage />;
-      default:           return <Dashboard onNavigate={handleNavigate} />;
+      case "students": return <StudentsPage />;
+      default: return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
@@ -118,7 +119,7 @@ function TeacherApp() {
         <div style={{ padding: "0 28px 40px" }}>
           <div style={{ fontSize: 11, letterSpacing: 6, color: "#4a4a7a", marginBottom: 8 }}>SYSTEM</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "#e0e0ff", letterSpacing: 1, lineHeight: 1.2 }}>
-            Smart<br/>Attend
+            Smart<br />Attend
           </div>
           <div style={{ marginTop: 8, height: 2, width: 40, background: "linear-gradient(90deg, #6366f1, #06b6d4)" }} />
           <div style={{
@@ -131,9 +132,9 @@ function TeacherApp() {
         {/* Nav items */}
         <div style={{ flex: 1, padding: "0 16px" }}>
           {NAV_ITEMS.map(item => {
-            const active   = page === item.id;
-            const blocked  = (item.id === "attendance" && isRegistering) ||
-                             (item.id === "register"   && isMarkingAttendance);
+            const active = page === item.id;
+            const blocked = (item.id === "attendance" && isRegistering) ||
+              (item.id === "register" && isMarkingAttendance);
             return (
               <button key={item.id} onClick={() => handleNavigate(item.id)} style={{
                 display: "flex", alignItems: "center", gap: 12,
@@ -203,6 +204,14 @@ function TeacherApp() {
 
 function AppRouter() {
   const { user } = useAuth();
+
+  // Check for magic-link token in URL (?token=...)
+  const params = new URLSearchParams(window.location.search);
+  const emailToken = params.get("token");
+  if (emailToken && !user) {
+    return <VerifyEmailPage token={emailToken} />;
+  }
+
   if (!user) return <AuthPage />;
   if (user.role === "student") return <StudentDashboard />;
   return <TeacherApp />;

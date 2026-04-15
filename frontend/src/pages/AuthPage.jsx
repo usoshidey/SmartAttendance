@@ -3,28 +3,26 @@ import api from "../api";
 import { useAuth } from "../context/AuthContext";
 
 // ── Modes ─────────────────────────────────────────────────────────────────────
-// "role"         → pick Teacher or Student
-// "teacher-login"→ email + password → OTP
-// "student-login"→ roll_no + password → OTP
-// "teacher-signup" → name + email + password → OTP
-// "student-signup" → name + roll_no + password → OTP
-// "otp"          → enter OTP code → get token
+// "role"           → pick Teacher or Student
+// "teacher-login"  → email + password → sends magic link
+// "student-login"  → roll_no + password → direct JWT login
+// "teacher-signup" → name + email + password → sends magic link
+// "student-signup" → name + roll_no + password → direct JWT signup
+// "email-sent"     → waiting screen shown after teacher login/signup
 
 export default function AuthPage() {
   const { login } = useAuth();
-  const [mode, setMode]         = useState("role");
-  const [form, setForm]         = useState({ name: "", email: "", roll_no: "", password: "", otp: "" });
-  const [pendingUserId, setPendingUserId] = useState(null);
-  const [otpCode, setOtpCode]   = useState("");   // shown on screen
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [mode, setMode] = useState("role");
+  const [form, setForm] = useState({ name: "", email: "", roll_no: "", password: "" });
+  const [sentEmail, setSentEmail] = useState(""); // masked email shown on waiting screen
+  const [devLink, setDevLink] = useState(""); // dev fallback when SMTP not configured
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const reset = () => { setForm({ name: "", email: "", roll_no: "", password: "", otp: "" }); setError(""); };
+  const reset = () => { setForm({ name: "", email: "", roll_no: "", password: "" }); setError(""); };
 
-  const isTeacher = mode.includes("teacher");
-
-  // ── Submit credentials → get OTP ─────────────────────────────────────────
+  // ── Submit credentials ────────────────────────────────────────────────────
   const handleCredentials = async () => {
     setError(""); setLoading(true);
     try {
@@ -43,37 +41,21 @@ export default function AuthPage() {
         if (form.password.length < 6) { setError("Password must be at least 6 characters"); setLoading(false); return; }
         res = await api.signupStudent(form.name, form.roll_no, form.password);
       }
-      // res = { user_id, otp_code, message }
-      setPendingUserId(res.user_id);
-      setOtpCode(res.otp_code);
-      setMode("otp");
+
+      // Students (login/signup) get a JWT directly in the response
+      if (res.access_token) {
+        login(res);
+        return;
+      }
+
+      // Teachers: backend sent a magic link email
+      setSentEmail(res.message || "Check your inbox.");
+      setDevLink(res.dev_link || "");
+      setMode("email-sent");
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // ── Submit OTP → get JWT token ────────────────────────────────────────────
-  const handleOTP = async () => {
-    setError(""); setLoading(true);
-    try {
-      const res = await api.verifyOtp(pendingUserId, form.otp);
-      login(res);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    try {
-      const res = await api.resendOtp(pendingUserId);
-      setOtpCode(res.otp_code);
-      setError("");
-    } catch (e) {
-      setError(e.message);
     }
   };
 
@@ -106,23 +88,15 @@ export default function AuthPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {[
                   { role: "teacher", icon: "👨‍🏫", title: "Teacher", sub: "Manage subjects, register students, mark attendance" },
-                  { role: "student", icon: "🎓", title: "Student",  sub: "View your registration status and attendance records" },
+                  { role: "student", icon: "🎓", title: "Student", sub: "View your registration status and attendance records" },
                 ].map(r => (
                   <div key={r.role}>
                     <div style={{ fontSize: 9, letterSpacing: 2, color: "#3a3a5a", marginBottom: 8 }}>
                       {r.title.toUpperCase()}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <RoleBtn
-                        label={`Sign In`}
-                        color="#6366f1"
-                        onClick={() => { reset(); setMode(`${r.role}-login`); }}
-                      />
-                      <RoleBtn
-                        label={`Sign Up`}
-                        color="#10b981"
-                        onClick={() => { reset(); setMode(`${r.role}-signup`); }}
-                      />
+                      <RoleBtn label="Sign In" color="#6366f1" onClick={() => { reset(); setMode(`${r.role}-login`); }} />
+                      <RoleBtn label="Sign Up" color="#10b981" onClick={() => { reset(); setMode(`${r.role}-signup`); }} />
                     </div>
                   </div>
                 ))}
@@ -159,7 +133,7 @@ export default function AuthPage() {
               <FormHeader icon="🎓" title="Student Sign In" onBack={() => setMode("role")} />
               <Field label="Roll Number" value={form.roll_no} onChange={v => set("roll_no", v)} placeholder="Your roll number" />
               <Field label="Password" value={form.password} onChange={v => set("password", v)} type="password" placeholder="••••••••" />
-              <SubmitBtn loading={loading} label="Continue →" onClick={handleCredentials} />
+              <SubmitBtn loading={loading} label="Sign In →" onClick={handleCredentials} />
               <SwitchLink text="Don't have an account?" link="Sign up" onClick={() => { reset(); setMode("student-signup"); }} />
             </>
           )}
@@ -179,44 +153,50 @@ export default function AuthPage() {
             </>
           )}
 
-          {/* ── OTP Verification ── */}
-          {mode === "otp" && (
+          {/* ── Email Sent (magic link waiting screen) ── */}
+          {mode === "email-sent" && (
             <>
-              <FormHeader
-                icon="🔐"
-                title="Verify OTP"
-                onBack={() => { setMode(pendingUserId ? (isTeacher ? "teacher-login" : "student-login") : "role"); setOtpCode(""); }}
-              />
-
-              {/* OTP display — shown on screen only if SMTP not configured or student */}
-              {otpCode ? (
-                <div style={{ marginBottom: 24, padding: 20, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 12, textAlign: "center" }}>
-                  <div style={{ fontSize: 11, letterSpacing: 2, color: "#4a4a7a", marginBottom: 12 }}>YOUR ONE-TIME PASSWORD</div>
-                  <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: 12, color: "#a5b4fc" }}>{otpCode}</div>
-                  <div style={{ fontSize: 10, color: "#3a3a5a", marginTop: 10 }}>Valid for 5 minutes</div>
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
+                <div style={{ color: "#e0e0ff", fontWeight: 700, fontSize: 16, marginBottom: 10 }}>
+                  Check Your Email
                 </div>
-              ) : (
-                <div style={{ marginBottom: 24, padding: 20, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 12, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, marginBottom: 10 }}>📧</div>
-                  <div style={{ color: "#6ee7b7", fontSize: 13, fontWeight: 600 }}>OTP sent to your email</div>
-                  <div style={{ color: "#3a3a5a", fontSize: 11, marginTop: 6 }}>Check your inbox (and spam folder). Valid for 5 minutes.</div>
+                <div style={{ color: "#5a5a8a", fontSize: 12, lineHeight: 1.7 }}>
+                  {sentEmail}
+                </div>
+                <div style={{ marginTop: 20, padding: "14px 18px", background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 10 }}>
+                  <div style={{ color: "#6ee7b7", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    ✓ Verification link sent
+                  </div>
+                  <div style={{ color: "#3a5a4a", fontSize: 11 }}>
+                    Click the link in your email to sign in. It expires in 15 minutes.
+                  </div>
+                </div>
+              </div>
+
+              {/* Dev fallback — shown only when SMTP not configured */}
+              {devLink && (
+                <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 8 }}>
+                  <div style={{ color: "#f59e0b", fontSize: 10, letterSpacing: 1, marginBottom: 6 }}>
+                    ⚙ DEV MODE — SMTP NOT CONFIGURED
+                  </div>
+                  <div style={{ color: "#6a5a2a", fontSize: 10, marginBottom: 10 }}>
+                    Click this link to verify (only visible in dev mode):
+                  </div>
+                  <a
+                    href={devLink}
+                    style={{ display: "block", padding: "8px 12px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 6, color: "#fbbf24", fontSize: 11, wordBreak: "break-all", textDecoration: "none" }}
+                  >
+                    {devLink}
+                  </a>
                 </div>
               )}
 
-              <Field
-                label="Enter OTP"
-                value={form.otp}
-                onChange={v => set("otp", v)}
-                placeholder="6-digit code shown above"
-              />
-              <SubmitBtn loading={loading} label="Verify & Sign In →" onClick={handleOTP} />
-
-              <button onClick={handleResendOTP} style={{
-                width: "100%", marginTop: 10, padding: "8px",
-                background: "transparent", border: "none",
-                color: "#4a4a6a", fontSize: 11, cursor: "pointer", letterSpacing: 1
-              }}>
-                Generate new OTP
+              <button
+                onClick={() => { reset(); setMode("role"); setDevLink(""); setSentEmail(""); }}
+                style={{ width: "100%", marginTop: 20, padding: "10px", background: "transparent", border: "1px solid #1a1a30", borderRadius: 8, color: "#4a4a6a", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}
+              >
+                ← Back to Login
               </button>
             </>
           )}
@@ -255,8 +235,7 @@ function Field({ label, value, onChange, placeholder, type = "text" }) {
           width: "100%", padding: "11px 14px", background: "#080810",
           border: "1px solid #1a1a30", borderRadius: 8,
           color: "#e0e0ff", fontFamily: "inherit", fontSize: 13,
-          outline: "none", boxSizing: "border-box",
-          transition: "border-color 0.2s"
+          outline: "none", boxSizing: "border-box", transition: "border-color 0.2s"
         }}
         onFocus={e => e.target.style.borderColor = "#6366f1"}
         onBlur={e => e.target.style.borderColor = "#1a1a30"}

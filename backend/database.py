@@ -140,9 +140,11 @@ class User(Base):
     name       = Column(String, nullable=False)
     roll_no    = Column(String, nullable=True)   # students only
     role       = Column(Enum("teacher", "student", name="user_role"), nullable=False)
-    email      = Column(String, unique=True, nullable=False)
+    email      = Column(String, unique=True, nullable=True)
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    verify_token         = Column(String, nullable=True)    # magic-link token
+    verify_token_expires = Column(DateTime, nullable=True)  # token expiry
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
