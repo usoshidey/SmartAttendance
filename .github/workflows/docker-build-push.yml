@@ -57,3 +57,26 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:latest
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache,mode=max
+
+  # ── Auto-deploy to server via SSH ──────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push   # Only runs after images are built successfully
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            docker-compose pull
+            docker-compose up -d --remove-orphans
+            # Run DB migrations (safe - only adds new columns, never deletes)
+            docker-compose exec -T backend python -c "from backend.database import create_tables; create_tables()"
+            echo "✅ Deployment complete at $(date)"
