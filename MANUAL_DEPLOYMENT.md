@@ -286,3 +286,5 @@ ssh user10@10.29.8.13 'cd /home/user10/SmartAttendanceSystem && docker-compose p
 
 **Deployment Ready! ✅**
 Execute the 3 steps above to deploy your application.
+
+echo " " >> MANUAL_DEPLOYMENT.md
