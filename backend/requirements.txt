@@ -12,12 +12,12 @@ psycopg2-binary==2.9.9
 
 # ML / CV
 ultralytics==8.4.14
-deepface==0.0.98
-tensorflow==2.15.0
-tf-keras==2.15.0
+deepface==0.0.93
+tensorflow-cpu==2.13.1
+tf-keras==2.13.1
 opencv-python-headless==4.10.0.84
 scikit-learn==1.5.1
-numpy==1.26.4
+numpy==1.24.4
 
 # Excel
 openpyxl==3.1.5
