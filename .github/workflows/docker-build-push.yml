@@ -35,25 +35,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Backend Image (multi-arch)
+      - name: Build and push Backend Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./backend/Dockerfile
           push: true
-          # Build for both ARM64 (Oracle Cloud A1) and AMD64 (local dev/other servers)
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:latest
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache,mode=max
 
-      - name: Build and push Frontend Image (multi-arch)
+      - name: Build and push Frontend Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./frontend/Dockerfile.frontend
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:latest
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache,mode=max
