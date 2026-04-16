@@ -9,8 +9,8 @@ __pycache__/
 .env.*
 
 # Data & models
-data/
-models/
+/data/
+/models/
 smart_attendance.db
 
 # Node
