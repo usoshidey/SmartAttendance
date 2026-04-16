@@ -54,3 +54,18 @@ class AttendanceSessionOut(BaseModel):
     subject_id: int
     date: date
     records: List[AttendanceRecordOut]
+
+class ClusterFaceOut(BaseModel):
+    cluster_id: int
+    face_paths: List[str]
+    face_count: int
+
+class ClusterAssignment(BaseModel):
+    cluster_id: int
+    name: str
+    roll_no: str
+
+class AssignClustersRequest(BaseModel):
+    job_id: str
+    subject_id: int
+    assignments: List[ClusterAssignment]
