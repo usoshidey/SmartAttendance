@@ -176,3 +176,6 @@ Video
 - **Celery concurrency=1** is intentional — YOLO + DeepFace are GPU/memory intensive
 - The **similarity threshold** of 0.35 can be raised if you get false positives, or lowered if students are being missed
 - Face images are stored per job in `data/uploads/{job_id}/`
+
+
+echo " " >> MANUAL_DEPLOYMENT.md

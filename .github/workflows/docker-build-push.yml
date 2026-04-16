@@ -1,6 +1,7 @@
 name: Build and Push Docker Images
 
 on:
+  workflow_dispatch:    # allows manual trigger from GitHub UI
   push:
     branches:
       - main
@@ -11,6 +12,7 @@ on:
       - 'frontend/Dockerfile.frontend'
       - 'backend/requirements.txt'
       - 'docker-compose.yml'
+      - '.github/workflows/**'
 
 jobs:
   build-and-push:
