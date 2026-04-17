@@ -33,10 +33,7 @@ def generate_embeddings(
         f for f in os.listdir(faces_dir)
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
     ])
-    MAX_FACES = 600
-    if len(files) > MAX_FACES:
-        step = len(files) / MAX_FACES
-        files = [files[int(i * step)] for i in range(MAX_FACES)]
+
     # No hard cap — NoiseRemoval is disabled (NR_THRESHOLD=0) so
     # the old OOM risk from N×N×4096 matrix is gone.
     # More faces = better DBSCAN clustering, especially for large classes.

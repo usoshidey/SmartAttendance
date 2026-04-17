@@ -1,12 +1,11 @@
 """
 routers/auth.py
-Authentication with email magic-link verification.
-Teachers receive a verification link by email; clicking it logs them in.
-Students (no email) get a JWT directly after credential check.
+Authentication with real email OTP via Gmail SMTP.
 """
 import os
 import re
-import secrets
+import random
+import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -31,18 +30,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-teacher")
 
-# ── SMTP config ────────────────────────────────────────────────────────────────
-SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+# ── SMTP config (set in .env or environment) ──────────────────────────────────
+SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")       # your Gmail address
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")    # Gmail App Password
 SMTP_HOST     = "smtp.gmail.com"
 SMTP_PORT     = 587
 
-# ── App base URL for magic link ────────────────────────────────────────────────
-# Set this to your public app URL e.g. http://10.29.8.13:6004
-APP_BASE_URL  = os.getenv("APP_BASE_URL", "http://localhost:6004")
-
-# ── Token expiry ───────────────────────────────────────────────────────────────
-VERIFY_TOKEN_EXPIRE_MINUTES = 15
+# ── In-memory OTP store: {user_id: (otp_code, expires_at, email_or_roll)} ────
+_otp_store: dict = {}
+OTP_EXPIRE_SECONDS = 300  # 5 minutes
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -63,6 +59,16 @@ class TeacherLoginRequest(BaseModel):
 class StudentLoginRequest(BaseModel):
     roll_no:  str
     password: str
+
+class OTPVerifyRequest(BaseModel):
+    user_id: int
+    otp:     str
+
+class OTPPendingResponse(BaseModel):
+    user_id: int
+    message: str
+    # otp_code only included if SMTP not configured (fallback for dev)
+    otp_code: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -99,51 +105,26 @@ def create_token(user_id: int, role: str) -> str:
         SECRET_KEY, algorithm=ALGORITHM
     )
 
-def _issue_verify_token(user: User, db: Session) -> str:
-    """Generate a secure random token, store it on the user row, return it."""
-    token = secrets.token_urlsafe(32)
-    user.verify_token = token
-    user.verify_token_expires = datetime.utcnow() + timedelta(minutes=VERIFY_TOKEN_EXPIRE_MINUTES)
-    db.commit()
-    return token
-
-def _send_verify_email(to_email: str, name: str, token: str) -> bool:
-    """Send a beautiful magic-link email. Returns True on success."""
+def _send_otp_email(to_email: str, otp_code: str, name: str) -> bool:
+    """Send OTP to email via Gmail SMTP. Returns True if sent successfully."""
     if not SMTP_EMAIL or not SMTP_PASSWORD:
-        return False
-
-    link = f"{APP_BASE_URL}?token={token}"
+        return False  # SMTP not configured — fallback to showing OTP on screen
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Smart Attendance — Verify Your Email"
+        msg["Subject"] = "Smart Attendance — Your OTP"
         msg["From"]    = f"Smart Attendance <{SMTP_EMAIL}>"
         msg["To"]      = to_email
 
         html = f"""
-        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 0; background: #06060f; border-radius: 16px; overflow: hidden; color: #e0e0ff;">
-          <div style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 36px 40px 28px;">
-            <div style="font-size: 28px; font-weight: 900; color: #fff; letter-spacing: 2px;">◈ SMART ATTENDANCE</div>
-            <div style="color: rgba(255,255,255,0.65); font-size: 12px; letter-spacing: 3px; margin-top: 6px;">AI-POWERED CLASSROOM SYSTEM</div>
-          </div>
-          <div style="padding: 36px 40px;">
-            <p style="color: #a0a0cc; font-size: 15px; margin: 0 0 8px;">Hi <strong style="color: #e0e0ff;">{name}</strong>,</p>
-            <p style="color: #6a6a9a; font-size: 14px; margin: 0 0 28px; line-height: 1.6;">
-              Click the button below to verify your email and sign in to Smart Attendance.
-              This link is valid for <strong style="color: #a5b4fc;">15 minutes</strong>.
-            </p>
-            <a href="{link}" style="display: block; text-align: center; padding: 16px 32px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; letter-spacing: 1px;">
-              ✓ &nbsp;Verify &amp; Sign In
-            </a>
-            <p style="color: #3a3a5a; font-size: 11px; margin-top: 28px; line-height: 1.6;">
-              If you didn't request this, you can safely ignore this email.<br>
-              The link will expire automatically after 15 minutes.
-            </p>
-            <p style="color: #2a2a4a; font-size: 11px; margin-top: 16px; word-break: break-all;">
-              Or paste this URL in your browser:<br>
-              <span style="color: #4a4a7a;">{link}</span>
-            </p>
-          </div>
+        <div style="font-family: monospace; max-width: 480px; margin: 0 auto; padding: 32px; background: #0d0d1a; border-radius: 12px; color: #e0e0ff;">
+            <div style="font-size: 20px; font-weight: bold; color: #6366f1; margin-bottom: 8px;">◈ Smart Attendance</div>
+            <p style="color: #8888aa;">Hi {name},</p>
+            <p style="color: #8888aa;">Your one-time password is:</p>
+            <div style="font-size: 40px; font-weight: 900; letter-spacing: 14px; color: #a5b4fc; text-align: center; padding: 24px; background: #0a0a14; border-radius: 8px; border: 1px solid #2a2a4a; margin: 20px 0;">
+                {otp_code}
+            </div>
+            <p style="color: #4a4a6a; font-size: 12px;">This OTP expires in 5 minutes. Do not share it with anyone.</p>
         </div>
         """
         msg.attach(MIMEText(html, "html"))
@@ -158,6 +139,23 @@ def _send_verify_email(to_email: str, name: str, token: str) -> bool:
         print(f"[SMTP ERROR] {e}")
         return False
 
+def generate_otp(user_id: int) -> str:
+    code = str(random.randint(100000, 999999))
+    _otp_store[user_id] = (code, time.time() + OTP_EXPIRE_SECONDS)
+    return code
+
+def verify_otp(user_id: int, code: str) -> bool:
+    entry = _otp_store.get(user_id)
+    if not entry:
+        return False
+    stored_code, expires_at = entry
+    if time.time() > expires_at:
+        del _otp_store[user_id]
+        return False
+    if stored_code != code.strip():
+        return False
+    del _otp_store[user_id]
+    return True
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -183,6 +181,28 @@ def require_teacher(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(403, "Teacher access required")
     return current_user
 
+def _otp_response(user: User, otp: str) -> dict:
+    """
+    If SMTP configured → send email, return message without OTP.
+    If not configured → return OTP in response (dev fallback).
+    """
+    email_sent = False
+    if user.email:
+        email_sent = _send_otp_email(user.email, otp, user.name)
+
+    if email_sent:
+        return {
+            "user_id":  user.id,
+            "message":  f"OTP sent to {user.email[:3]}***{user.email[user.email.index('@'):]}"
+        }
+    else:
+        # Fallback: show OTP on screen (dev mode or SMTP not configured)
+        return {
+            "user_id":  user.id,
+            "message":  "SMTP not configured — OTP shown below (dev mode)",
+            "otp_code": otp
+        }
+
 
 # ── Teacher Sign Up ────────────────────────────────────────────────────────────
 @router.post("/signup/teacher", status_code=201)
@@ -201,20 +221,8 @@ def teacher_signup(body: TeacherSignupRequest, db: Session = Depends(get_db)):
         role="teacher", roll_no=None, password_hash=hash_password(body.password)
     )
     db.add(user); db.commit(); db.refresh(user)
-
-    token = _issue_verify_token(user, db)
-    sent  = _send_verify_email(user.email, user.name, token)
-
-    if sent:
-        masked = f"{user.email[:3]}***{user.email[user.email.index('@'):]}"
-        return {"message": f"A verification link has been sent to {masked}. Check your inbox.", "email_sent": True}
-    else:
-        # SMTP not configured — return the token so dev can test manually
-        return {
-            "message": "SMTP not configured. Use the dev_link below to verify (dev mode only).",
-            "email_sent": False,
-            "dev_link": f"{APP_BASE_URL}?token={token}"
-        }
+    otp = generate_otp(user.id)
+    return _otp_response(user, otp)
 
 
 # ── Student Sign Up ────────────────────────────────────────────────────────────
@@ -234,12 +242,9 @@ def student_signup(body: StudentSignupRequest, db: Session = Depends(get_db)):
         roll_no=body.roll_no.strip(), password_hash=hash_password(body.password)
     )
     db.add(user); db.commit(); db.refresh(user)
-
-    # Students have no email — issue JWT directly
-    return TokenResponse(
-        access_token=create_token(user.id, user.role),
-        role=user.role, name=user.name, user_id=user.id
-    )
+    otp = generate_otp(user.id)
+    # Students have no email — always show OTP on screen
+    return {"user_id": user.id, "message": "Account created!", "otp_code": otp}
 
 
 # ── Teacher Login ──────────────────────────────────────────────────────────────
@@ -252,19 +257,8 @@ def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
     ).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Incorrect email or password")
-
-    token = _issue_verify_token(user, db)
-    sent  = _send_verify_email(user.email, user.name, token)
-
-    if sent:
-        masked = f"{user.email[:3]}***{user.email[user.email.index('@'):]}"
-        return {"message": f"A verification link has been sent to {masked}. Check your inbox.", "email_sent": True}
-    else:
-        return {
-            "message": "SMTP not configured. Use the dev_link below to verify (dev mode only).",
-            "email_sent": False,
-            "dev_link": f"{APP_BASE_URL}?token={token}"
-        }
+    otp = generate_otp(user.id)
+    return _otp_response(user, otp)
 
 
 # ── Student Login ──────────────────────────────────────────────────────────────
@@ -277,36 +271,35 @@ def student_login(body: StudentLoginRequest, db: Session = Depends(get_db)):
     ).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Incorrect roll number or password")
-
-    # Students get JWT immediately — no email verification needed
-    return TokenResponse(
-        access_token=create_token(user.id, user.role),
-        role=user.role, name=user.name, user_id=user.id
-    )
+    otp = generate_otp(user.id)
+    # Students have no email — show OTP on screen
+    return {"user_id": user.id, "message": "Credentials verified!", "otp_code": otp}
 
 
-# ── Verify Email Token (magic link endpoint) ───────────────────────────────────
-@router.get("/verify-email", response_model=TokenResponse)
-def verify_email_token(token: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.verify_token == token).first()
+# ── OTP Verify ─────────────────────────────────────────────────────────────────
+@router.post("/verify-otp", response_model=TokenResponse)
+def verify_otp_and_login(body: OTPVerifyRequest, db: Session = Depends(get_db)):
+    if not verify_otp(body.user_id, body.otp):
+        raise HTTPException(400, "Invalid or expired OTP. Please try again.")
+    user = db.query(User).filter(User.id == body.user_id).first()
     if not user:
-        raise HTTPException(400, "Invalid or already-used verification link. Please log in again.")
-    if not user.verify_token_expires or datetime.utcnow() > user.verify_token_expires:
-        # Clear expired token
-        user.verify_token = None
-        user.verify_token_expires = None
-        db.commit()
-        raise HTTPException(400, "This verification link has expired. Please log in again.")
-
-    # Consume the token (one-time use)
-    user.verify_token = None
-    user.verify_token_expires = None
-    db.commit()
-
+        raise HTTPException(404, "User not found")
     return TokenResponse(
         access_token=create_token(user.id, user.role),
         role=user.role, name=user.name, user_id=user.id
     )
+
+
+# ── Resend OTP ─────────────────────────────────────────────────────────────────
+@router.post("/resend-otp")
+def resend_otp(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    otp = generate_otp(user.id)
+    if user.email:
+        return _otp_response(user, otp)
+    return {"user_id": user.id, "message": "New OTP generated.", "otp_code": otp}
 
 
 # ── Me ─────────────────────────────────────────────────────────────────────────

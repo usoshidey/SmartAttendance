@@ -47,7 +47,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-new-production-secret-2}
       - SMTP_EMAIL=${SMTP_EMAIL:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:6004}
     depends_on:
       redis:
         condition: service_healthy

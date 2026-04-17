@@ -1,7 +1,6 @@
 name: Build and Push Docker Images
 
 on:
-  workflow_dispatch:    # allows manual trigger from GitHub UI
   push:
     branches:
       - main
@@ -11,12 +10,14 @@ on:
       - 'backend/Dockerfile'
       - 'frontend/Dockerfile.frontend'
       - 'backend/requirements.txt'
+      - 'package.json'
       - 'docker-compose.yml'
-      - '.github/workflows/**'
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout code
@@ -32,48 +33,17 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Backend Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./backend/Dockerfile
           push: true
-          platforms: linux/amd64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-backend:buildcache,mode=max
 
       - name: Build and push Frontend Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./frontend/Dockerfile.frontend
           push: true
-          platforms: linux/amd64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/smart-attendance-frontend:buildcache,mode=max
-
-  # ── Auto-deploy to server via SSH ──────────────────────────────────────────
-  # Requires these GitHub Secrets to be set:
-  #   SERVER_HOST      → e.g. 10.29.8.13
-  #   SERVER_USER      → e.g. ubuntu
-  #   SERVER_PASSWORD  → your server's login password
-  #   DEPLOY_PATH      → e.g. /home/ubuntu/SmartAttendanceSystem
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build-and-push   # Only runs after images are built successfully
-
-    steps:
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          script: |
-            cd ${{ secrets.DEPLOY_PATH }}
-            docker-compose pull
-            docker-compose up -d --remove-orphans
-            docker-compose exec -T backend python -c "from backend.database import create_tables; create_tables()"
-            echo "✅ Deployment complete at $(date)"
