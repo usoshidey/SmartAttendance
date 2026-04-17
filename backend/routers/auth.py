@@ -128,18 +128,10 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
         """
         msg.attach(MIMEText(html, "html"))
 
-        if SMTP_PORT == 465:
-            # Use SSL for port 465
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_EMAIL, SMTP_PASSWORD)
-                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-        else:
-            # Use STARTTLS for port 587 or others
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.ehlo()
-                server.starttls()
-                server.login(SMTP_EMAIL, SMTP_PASSWORD)
-                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        # Always use SSL for all ports (to match user's working test)
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
         return True
     except Exception as e:
         print(f"[SMTP ERROR] {e}")
