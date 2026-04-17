@@ -232,7 +232,7 @@ def student_signup(body: StudentSignupRequest, db: Session = Depends(get_db)):
     )
 
 # ── Teacher Login ──────────────────────────────────────────────────────────────
-@router.post("/login/teacher", response_model=VerificationLinkResponse)
+@router.post("/login/teacher")
 def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
     if not validate_email(body.email):
         raise HTTPException(400, "Invalid email format")
@@ -257,11 +257,17 @@ def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
         email_sent = send_verification_email(user.email, user.name, verification_token)
 
         if email_sent:
-            return {"message": f"Verification email sent to {user.email}. Please check your inbox and click the verification link."}
+            return VerificationLinkResponse(message=f"Verification email sent to {user.email}. Please check your inbox and click the verification link.")
         else:
-            return {"message": f"[DEV MODE] Verification link generated. Check terminal for link."}
+            return VerificationLinkResponse(message=f"[DEV MODE] Verification link generated. Check terminal for link.")
     
-    return {"message": "Email verified. You can now access the dashboard."}
+    # User is verified, return the access token
+    return TokenResponse(
+        access_token=create_token(user.id, user.role),
+        role=user.role,
+        name=user.name,
+        user_id=user.id
+    )
 
 # ── Student Login ──────────────────────────────────────────────────────────────
 @router.post("/login/student", response_model=TokenResponse)

@@ -4,11 +4,11 @@ import { useAuth } from "../context/AuthContext";
 
 export default function AuthPage() {
   const { login } = useAuth();
-  const [mode, setMode]         = useState("role");
-  const [form, setForm]         = useState({ name: "", email: "", roll_no: "", password: "" });
+  const [mode, setMode] = useState("role");
+  const [form, setForm] = useState({ name: "", email: "", roll_no: "", password: "" });
   const [verificationMsg, setVerificationMsg] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const reset = () => { setForm({ name: "", email: "", roll_no: "", password: "" }); setError(""); };
@@ -21,8 +21,12 @@ export default function AuthPage() {
       let res;
       if (mode === "teacher-login") {
         res = await api.loginTeacher(form.email, form.password);
-        setVerificationMsg(res.message || "Verification email sent. Please check your inbox.");
-        setMode("email-verification");
+        if (res.access_token) {
+          login(res);
+        } else {
+          setVerificationMsg(res.message || "Verification email sent. Please check your inbox.");
+          setMode("email-verification");
+        }
       } else if (mode === "student-login") {
         res = await api.loginStudent(form.roll_no, form.password);
         login(res);
