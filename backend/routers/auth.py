@@ -32,8 +32,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-teacher")
 # ── SMTP config (set in .env or environment) ──────────────────────────────────
 SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")       # your Gmail address
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")    # Gmail App Password
-SMTP_HOST     = "smtp.gmail.com"
-SMTP_PORT     = 587
+SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
 
 # ── Frontend URL for verification links ────────────────────────────────────────
 FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -108,7 +108,6 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
 
     try:
         verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
-        
         msg = MIMEMultipart("alternative")
         msg["Subject"] = "Smart Attendance — Verify Your Email"
         msg["From"]    = f"Smart Attendance <{SMTP_EMAIL}>"
@@ -129,11 +128,18 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
         """
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        if SMTP_PORT == 465:
+            # Use SSL for port 465
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+                server.login(SMTP_EMAIL, SMTP_PASSWORD)
+                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        else:
+            # Use STARTTLS for port 587 or others
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(SMTP_EMAIL, SMTP_PASSWORD)
+                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
         return True
     except Exception as e:
         print(f"[SMTP ERROR] {e}")
