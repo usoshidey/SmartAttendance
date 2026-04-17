@@ -1,29 +1,44 @@
 import { useEffect, useState } from "react";
-import api from "../api";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../api";
+
+// Helper to extract token from URL
+function getTokenFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("token");
+}
 
 /**
  * VerifyEmailPage
  * Rendered when the URL contains ?token=...
  * Calls GET /auth/verify-email?token=... and logs the user in on success.
  */
-export default function VerifyEmailPage({ token }) {
+
+export default function VerifyEmailPage() {
     const { login } = useAuth();
     const [status, setStatus] = useState("loading"); // "loading" | "success" | "error"
     const [errorMsg, setErrorMsg] = useState("");
 
     useEffect(() => {
-        if (!token) { setStatus("error"); setErrorMsg("No verification token found."); return; }
+        const token = getTokenFromUrl();
+        if (!token) {
+            setStatus("error");
+            setErrorMsg("No verification token found.");
+            return;
+        }
         api.verifyEmail(token)
             .then(res => {
-                login(res);       // sets JWT + user, triggers redirect
+                login(res); // Save token, update context
                 setStatus("success");
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 1500);
             })
             .catch(err => {
                 setErrorMsg(err.message || "This link is invalid or has expired.");
                 setStatus("error");
             });
-    }, [token]);
+    }, []);
 
     const containerStyle = {
         minHeight: "100vh", background: "#06060f",
@@ -80,13 +95,14 @@ export default function VerifyEmailPage({ token }) {
                         }}>
                             {errorMsg}
                         </div>
-                        <a href="/" style={{
-                            display: "block", padding: "12px", background: "linear-gradient(135deg, #6366f1, #4f46e5)",
-                            borderRadius: 8, color: "#fff", textDecoration: "none",
-                            fontSize: 13, fontWeight: 700, letterSpacing: 1
-                        }}>
+                        <button onClick={() => { window.location.href = "/"; }}
+                            style={{
+                                display: "block", padding: "12px", background: "linear-gradient(135deg, #6366f1, #4f46e5)",
+                                borderRadius: 8, color: "#fff", border: "none",
+                                fontSize: 13, fontWeight: 700, letterSpacing: 1, cursor: "pointer"
+                            }}>
                             ← Back to Login
-                        </a>
+                        </button>
                     </>
                 )}
             </div>

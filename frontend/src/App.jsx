@@ -6,7 +6,8 @@ import Dashboard from "./pages/Dashboard";
 import RegisterStudents from "./pages/RegisterStudents";
 import MarkAttendance from "./pages/MarkAttendance";
 import StudentsPage from "./pages/StudentsPage";
-import api from "./api";
+import { api } from "./api";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 
 const NAV_ITEMS = [
   { id: "dashboard",  label: "Dashboard",        icon: "⬡" },
@@ -107,6 +108,9 @@ function TeacherApp() {
   };
 
   return (
+
+    
+
     <div style={{ display: "flex", minHeight: "100vh", background: "#0a0a0f", fontFamily: "'IBM Plex Mono', monospace" }}>
       {/* Sidebar */}
       <nav style={{
@@ -209,6 +213,15 @@ function AppRouter() {
 }
 
 export default function App() {
+  // Intercept /verify-email route
+  const path = window.location.pathname;
+  if (path === "/verify-email") {
+    return (
+      <AuthProvider>
+        <VerifyEmailPage />
+      </AuthProvider>
+    );
+  }
   return (
     <AuthProvider><AppRouter /></AuthProvider>
   );
