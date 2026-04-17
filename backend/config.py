@@ -22,7 +22,7 @@ for d in [UPLOADS_DIR, FACES_DIR, FACES_FILTERED_DIR, EMBEDDINGS_DIR,
     d.mkdir(parents=True, exist_ok=True)
 
 # Frame extraction
-FRAME_SAMPLE_RATE = 5    # every 5th frame — same as working local version
+FRAME_SAMPLE_RATE = 10    # every 5th frame — same as working local version
 
 # Face filtering — matched to teacher's notebook (cell 9)
 # is_small threshold = 20px, is_blurred threshold = 50

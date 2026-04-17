@@ -38,6 +38,11 @@ def generate_embeddings(
     # the old OOM risk from N×N×4096 matrix is gone.
     # More faces = better DBSCAN clustering, especially for large classes.
 
+    MAX_FACES = 600
+    if len(files) > MAX_FACES:
+        step = len(files) / MAX_FACES
+        files = [files[int(i * step)] for i in range(MAX_FACES)]
+
     total      = len(files)
     embeddings = {}
     errors     = 0
