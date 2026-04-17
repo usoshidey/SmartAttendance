@@ -29,12 +29,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-teacher")
 
-# ── SMTP config (set in .env or environment) ──────────────────────────────────
-SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")       # your Gmail address
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")    # Gmail App Password
-SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
-
 # ── Frontend URL for verification links ────────────────────────────────────────
 FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:3000")
 VERIFICATION_TOKEN_EXPIRE_HOURS = 24
@@ -102,7 +96,12 @@ def generate_verification_token() -> str:
 
 def send_verification_email(to_email: str, name: str, verification_token: str) -> bool:
     """Send verification email with link. Returns True if sent successfully."""
-    if not SMTP_EMAIL or not SMTP_PASSWORD:
+    
+    # Fetch credentials at runtime to guarantee we have the latest .env updates
+    sender_email = os.getenv("SMTP_EMAIL", "").strip()
+    sender_password = os.getenv("SMTP_PASSWORD", "").strip()
+
+    if not sender_email or not sender_password:
         print(f"[DEV MODE] Verification link: {FRONTEND_URL}/verify-email?token={verification_token}")
         return False
 
@@ -110,7 +109,7 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
         verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
         msg = MIMEMultipart("alternative")
         msg["Subject"] = "Smart Attendance — Verify Your Email"
-        msg["From"]    = f"Smart Attendance <{SMTP_EMAIL}>"
+        msg["From"]    = f"Smart Attendance <{sender_email}>"
         msg["To"]      = to_email
 
         html = f"""
@@ -128,10 +127,10 @@ def send_verification_email(to_email: str, name: str, verification_token: str) -
         """
         msg.attach(MIMEText(html, "html"))
 
-        # Always use SSL for all ports (to match user's working test)
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        # Explicitly hardcode smtp.gmail.com and 465 to bypass firewall rules
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, to_email, msg.as_string())
         return True
     except Exception as e:
         print(f"[SMTP ERROR] {e}")
@@ -246,10 +245,8 @@ def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Incorrect email or password")
 
-    # If already verified, they should have gotten a token somehow
-    # But normally, we ask them to verify again if they're not verified
+    # If not verified, generate a new link
     if not user.is_verified:
-        # Generate new verification token
         verification_token = generate_verification_token()
         token_expires_at = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
         
@@ -257,7 +254,6 @@ def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
         user.verification_token_expires_at = token_expires_at
         db.commit()
 
-        # Send verification email
         email_sent = send_verification_email(user.email, user.name, verification_token)
 
         if email_sent:
@@ -265,8 +261,6 @@ def teacher_login(body: TeacherLoginRequest, db: Session = Depends(get_db)):
         else:
             return {"message": f"[DEV MODE] Verification link generated. Check terminal for link."}
     
-    # If verified, they can login with a token
-    # (In a real app, you might still ask for 2FA here)
     return {"message": "Email verified. You can now access the dashboard."}
 
 # ── Student Login ──────────────────────────────────────────────────────────────
@@ -283,7 +277,7 @@ def student_login(body: StudentLoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Incorrect roll number or password")
 
-    # Students are always verified (no email check needed)
+    # Students are always verified
     return TokenResponse(
         access_token=create_token(user.id, user.role),
         role=user.role,
@@ -294,10 +288,6 @@ def student_login(body: StudentLoginRequest, db: Session = Depends(get_db)):
 # ── Verify Email Token (from email link) ────────────────────────────────────────
 @router.get("/verify-email", response_model=TokenResponse)
 def verify_email(token: str, db: Session = Depends(get_db)):
-    """
-    Verify email using token from verification link.
-    Called when user clicks the link in their email.
-    """
     if not token:
         raise HTTPException(400, "Verification token is required")
 
@@ -309,17 +299,14 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(404, "Invalid verification token")
 
-    # Check if token has expired
     if user.verification_token_expires_at and datetime.utcnow() > user.verification_token_expires_at:
         raise HTTPException(400, "Verification link has expired. Please login again to receive a new link.")
 
-    # Mark user as verified
     user.is_verified = True
     user.verification_token = None
     user.verification_token_expires_at = None
     db.commit()
 
-    # Return access token
     return TokenResponse(
         access_token=create_token(user.id, user.role),
         role=user.role,
@@ -330,9 +317,6 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 # ── Resend Verification Email ──────────────────────────────────────────────────
 @router.post("/resend-verification", response_model=VerificationLinkResponse)
 def resend_verification(email: str, db: Session = Depends(get_db)):
-    """
-    Resend verification email if the first one was lost.
-    """
     if not validate_email(email):
         raise HTTPException(400, "Invalid email format")
 
@@ -347,7 +331,6 @@ def resend_verification(email: str, db: Session = Depends(get_db)):
     if user.is_verified:
         return {"message": "This email is already verified. You can login now."}
 
-    # Generate new verification token
     verification_token = generate_verification_token()
     token_expires_at = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
     
@@ -355,7 +338,6 @@ def resend_verification(email: str, db: Session = Depends(get_db)):
     user.verification_token_expires_at = token_expires_at
     db.commit()
 
-    # Send verification email
     email_sent = send_verification_email(user.email, user.name, verification_token)
 
     if email_sent:
