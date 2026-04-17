@@ -28,14 +28,25 @@ def get_yolo_model(model_path: str):
 
 def _run_yolo_on_frame(model, frame, conf: float, frame_idx: int, output_dir: str, saved_paths: list):
     """Helper: run YOLO on one frame and save all detected face crops."""
-    results = model(frame, conf=conf, verbose=False)
+    # Ensure it only detects class 0 (Person / Face depending on specific yolov8 model)
+    results = model(frame, conf=conf, classes=[0], verbose=False)
     face_id = 0
+    h, w = frame.shape[:2]
+    
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
+            
+            # Clamp coordinates to frame boundaries to prevent empty slice errors
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(w, x2)
+            y2 = min(h, y2)
+            
             face = frame[y1:y2, x1:x2]
-            if face.size == 0:
+            if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
                 continue
+                
             face_id += 1
             out_name = f"frame_{frame_idx:06d}_face_{face_id:03d}.jpg"
             out_path = os.path.join(output_dir, out_name)
