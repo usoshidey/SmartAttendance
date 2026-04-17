@@ -29,8 +29,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-teacher")
 
-# ── Frontend URL for verification links ────────────────────────────────────────
-FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# ── Global Config ──────────────────────────────────────────────────────────────
 VERIFICATION_TOKEN_EXPIRE_HOURS = 24
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -97,16 +96,17 @@ def generate_verification_token() -> str:
 def send_verification_email(to_email: str, name: str, verification_token: str) -> bool:
     """Send verification email with link. Returns True if sent successfully."""
     
-    # Fetch credentials at runtime to guarantee we have the latest .env updates
+    # Fetch credentials and frontend URL at runtime to guarantee we have the latest .env updates
     sender_email = os.getenv("SMTP_EMAIL", "").strip()
     sender_password = os.getenv("SMTP_PASSWORD", "").strip()
+    current_frontend_url = os.getenv("FRONTEND_URL", "http://10.29.8.13:6004").rstrip('/')
 
     if not sender_email or not sender_password:
-        print(f"[DEV MODE] Verification link: {FRONTEND_URL}/verify-email?token={verification_token}")
+        print(f"[DEV MODE] Verification link: {current_frontend_url}/verify-email?token={verification_token}")
         return False
 
     try:
-        verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
+        verification_link = f"{current_frontend_url}/verify-email?token={verification_token}"
         msg = MIMEMultipart("alternative")
         msg["Subject"] = "Smart Attendance — Verify Your Email"
         msg["From"]    = f"Smart Attendance <{sender_email}>"
