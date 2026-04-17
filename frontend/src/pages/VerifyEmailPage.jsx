@@ -14,7 +14,7 @@ export default function VerifyEmailPage({ token }) {
 
     useEffect(() => {
         if (!token) { setStatus("error"); setErrorMsg("No verification token found."); return; }
-        api.verifyEmailToken(token)
+        api.verifyEmail(token)
             .then(res => {
                 login(res);       // sets JWT + user, triggers redirect
                 setStatus("success");

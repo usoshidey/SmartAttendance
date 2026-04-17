@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Float,
+    create_engine, Column, Integer, String, Float, Boolean,
     DateTime, Date, Text, Enum, ForeignKey, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -140,8 +140,11 @@ class User(Base):
     name       = Column(String, nullable=False)
     roll_no    = Column(String, nullable=True)   # students only
     role       = Column(Enum("teacher", "student", name="user_role"), nullable=False)
-    email      = Column(String, unique=True, nullable=False)
+    email      = Column(String, unique=True, nullable=True)
     password_hash = Column(String, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    verification_token = Column(String, nullable=True)
+    verification_token_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 def create_tables():

@@ -33,18 +33,16 @@ export const api = {
     request("POST", "/auth/signup/teacher", { name, email, password }),
   loginTeacher: (email, password) =>
     request("POST", "/auth/login/teacher", { email, password }),
+  resendVerification: (email) =>
+    request("POST", `/auth/resend-verification?email=${encodeURIComponent(email)}`),
+  verifyEmail: (token) =>
+    request("GET", `/auth/verify-email?token=${encodeURIComponent(token)}`),
 
   // ── Auth — Student ─────────────────────────────────────────────────────────
   signupStudent: (name, roll_no, password) =>
     request("POST", "/auth/signup/student", { name, roll_no, password }),
   loginStudent: (roll_no, password) =>
     request("POST", "/auth/login/student", { roll_no, password }),
-
-  // ── OTP ────────────────────────────────────────────────────────────────────
-  verifyOtp: (user_id, otp) =>
-    request("POST", "/auth/verify-otp", { user_id, otp }),
-  resendOtp: (user_id) =>
-    request("POST", `/auth/resend-otp?user_id=${user_id}`),
 
   me: () => request("GET", "/auth/me"),
   studentStatus: () => request("GET", "/auth/student/status"),
