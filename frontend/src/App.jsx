@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import StudentDashboard from "./pages/StudentDashboard";
@@ -213,16 +214,14 @@ function AppRouter() {
 }
 
 export default function App() {
-  // Intercept /verify-email route
-  const path = window.location.pathname;
-  if (path === "/verify-email") {
-    return (
-      <AuthProvider>
-        <VerifyEmailPage />
-      </AuthProvider>
-    );
-  }
   return (
-    <AuthProvider><AppRouter /></AuthProvider>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/*" element={<AppRouter />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
