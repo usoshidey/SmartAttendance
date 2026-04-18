@@ -29,7 +29,7 @@ def get_yolo_model(model_path: str):
 def _run_yolo_on_frame(model, frame, conf: float, frame_idx: int, output_dir: str, saved_paths: list):
     """Helper: run YOLO on one frame and save all detected face crops."""
     # Ensure it only detects class 0 (Person / Face depending on specific yolov8 model)
-    results = model(frame, conf=conf, classes=[0], verbose=False)
+    results = model(frame, conf=conf, verbose=False)
     face_id = 0
     h, w = frame.shape[:2]
     
