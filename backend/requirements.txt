@@ -24,6 +24,8 @@ xlsxwriter==3.2.0
 # Utilities
 python-multipart==0.0.9
 pillow==10.4.0
+tensorflow==2.16.1
+tf-keras==2.16.0
 
 # Auth
 python-jose[cryptography]==3.3.0
